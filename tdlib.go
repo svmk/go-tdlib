@@ -49,6 +49,7 @@ type Client struct {
 	receivers    []EventReceiver
 	waiters      sync.Map
 	receiverLock *sync.Mutex
+	catchTimeout time.Duration
 }
 
 // Config holds tdlibParameters
@@ -82,6 +83,7 @@ func NewClient(config Config) *Client {
 	client.receivers = make([]EventReceiver, 0, 1)
 	client.receiverLock = &sync.Mutex{}
 	client.Config = config
+	client.catchTimeout = 10 * time.Second
 
 	go func() {
 		for {
@@ -223,6 +225,11 @@ func SetLogVerbosityLevel(level int) {
 	C.td_set_log_verbosity_level(C.int(level))
 }
 
+// SetCatchTimeout Sets the timeout for SendAndCatch method.
+func (client *Client) SetCatchTimeout(catchTimeout time.Duration) {
+	client.catchTimeout = catchTimeout
+}
+
 // SendAndCatch Sends request to the TDLib client and catches the result in updates channel.
 // You can provide string or UpdateData.
 func (client *Client) SendAndCatch(jsonQuery interface{}) (UpdateMsg, error) {
@@ -261,7 +268,7 @@ func (client *Client) SendAndCatch(jsonQuery interface{}) (UpdateMsg, error) {
 	case response := <-waiter:
 		return response, nil
 		// or timeout
-	case <-time.After(10 * time.Second):
+	case <-time.After(client.catchTimeout):
 		client.waiters.Delete(randomString)
 		return UpdateMsg{}, errors.New("timeout")
 	}
